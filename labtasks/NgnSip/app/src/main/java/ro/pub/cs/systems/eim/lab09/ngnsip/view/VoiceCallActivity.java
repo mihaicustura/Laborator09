@@ -11,6 +11,9 @@ import android.widget.EditText;
 import android.widget.TextView;
 
 import org.doubango.ngn.NgnEngine;
+import org.doubango.ngn.events.NgnInviteEventArgs;
+import org.doubango.ngn.events.NgnRegistrationEventArgs;
+import org.doubango.ngn.media.NgnMediaType;
 import org.doubango.ngn.services.INgnConfigurationService;
 import org.doubango.ngn.services.INgnSipService;
 import org.doubango.ngn.sip.NgnAVSession;
@@ -32,7 +35,7 @@ public class VoiceCallActivity extends AppCompatActivity {
     private IntentFilter registrationIntentFilter;
     private RegistrationBroadcastReceiver registrationBroadcastReceiver;
 
-    private IntentFilter voiceCallIntentFilter;
+    private IntentFilter VoiceCallBroadcastReceiver;
     private VoiceCallBroadcastReceiver voiceCallBroadcastReceiver;
 
     private Button registerButton = null;
@@ -64,6 +67,11 @@ public class VoiceCallActivity extends AppCompatActivity {
             // - set the NGN engine parameters via the configureStack() method
             // - start the NGN engine and register the activity to the SIP service
             // invoke the startNgnEngine() and registerSipService() methods respectively
+            configureStack();
+            if (!startNgnEngine()) {
+                return;
+            }
+            registerSipService();
         }
 
     }
@@ -75,6 +83,7 @@ public class VoiceCallActivity extends AppCompatActivity {
         public void onClick(View view) {
             // TODO exercise 5b
             // unregister the SIP service by invoking the unregisterSipService() method
+            unregisterSipService();
         }
 
     }
@@ -100,6 +109,17 @@ public class VoiceCallActivity extends AppCompatActivity {
             // - if the call can be made, set the callStatusTextView to "calling" and log the information
             // - if the call cannot be made, log the information accordingly
             // hint: use the makeCall() method of the NgnAVSession instance
+            ngnAVSession = NgnAVSession.createOutgoingSession(
+                    NgnEngine.getInstance().getSipService().getSipStack(),
+                    NgnMediaType.Audio
+            );
+            if (ngnAVSession.makeCall(validUri)) {
+                callStatusTextView.setText(getResources().getString(R.string.calling));
+                Log.d(Constants.TAG, "Call succeeded");
+            } else {
+                callStatusTextView.setText(getResources().getString(R.string.no_call));
+                Log.d(Constants.TAG, "Call failed");
+            }
 
         }
     }
@@ -113,7 +133,10 @@ public class VoiceCallActivity extends AppCompatActivity {
             // TODO exercise 7b
             // this method should check whether the NgnAVSession was previously created
             // hint: use the hangUpCall() method of the NgnAVSession instance
-
+            if (ngnAVSession != null) {
+                ngnAVSession.hangUpCall();
+                Log.d(Constants.TAG, "Hang Up");
+            }
         }
 
     }
@@ -130,7 +153,24 @@ public class VoiceCallActivity extends AppCompatActivity {
                 // - compute the character code (0-9 for digits, 10 for '*', 11 for '#')
                 // - use the sendDTMF() method of the NgnAVSession instance
                 // - log the result using Logcat
-
+                int character = dtmfEditText.getText().toString().charAt(0);
+                switch(character) {
+                    case '*':
+                        character = 10;
+                        break;
+                    case '#':
+                        character = 11;
+                        break;
+                    default:
+                        if (character >= '0' && character <= '9') {
+                            character -= '0';
+                        }
+                }
+                if (!ngnAVSession.sendDTMF(character)) {
+                    Log.e(Constants.TAG, "Failed to send DTMF " + character);
+                } else {
+                    Log.d(Constants.TAG, "Succeeded to send DTMF " + character);
+                }
             }
         }
 
@@ -240,6 +280,10 @@ public class VoiceCallActivity extends AppCompatActivity {
         // - create a RegistrationBroadcastReceiver instance
         // - create an IntentFilter instance for NgnRegistrationEventArgs.ACTION_REGISTRATION_EVENT action
         // - register the broadcast intent with the intent filter
+        registrationBroadcastReceiver = new RegistrationBroadcastReceiver(registrationStatusTextView);
+        registrationIntentFilter = new IntentFilter();
+        registrationIntentFilter.addAction(NgnRegistrationEventArgs.ACTION_REGISTRATION_EVENT);
+        registerReceiver(registrationBroadcastReceiver, registrationIntentFilter);
 
     }
 
@@ -247,7 +291,10 @@ public class VoiceCallActivity extends AppCompatActivity {
 
         // TODO exercise 6b
         // unregister the RegistrationBroadcastReceiver instance
-
+        if (registrationBroadcastReceiver != null) {
+            unregisterReceiver(registrationBroadcastReceiver);
+            registrationBroadcastReceiver = null;
+        }
     }
 
     public void enableVoiceCallBroadcastReceiver() {
@@ -256,6 +303,10 @@ public class VoiceCallActivity extends AppCompatActivity {
         // - create a VoiceCallBroadcastReceiver instance
         // - create an IntentFilter instance for NgnInviteEventArgs.ACTION_INVITE_EVENT action
         // - register the broadcast receiver with the intent filter
+        voiceCallBroadcastReceiver = new VoiceCallBroadcastReceiver(SIPAddressEditText, callStatusTextView);
+        VoiceCallBroadcastReceiver = new IntentFilter();
+        VoiceCallBroadcastReceiver.addAction(NgnInviteEventArgs.ACTION_INVITE_EVENT);
+        registerReceiver(voiceCallBroadcastReceiver, VoiceCallBroadcastReceiver);
 
     }
 
@@ -263,6 +314,10 @@ public class VoiceCallActivity extends AppCompatActivity {
 
         // TODO exercise 8b
         // unregister the VoiceCallBroadcastReceiver instance
+        if (voiceCallBroadcastReceiver != null) {
+            unregisterReceiver(voiceCallBroadcastReceiver);
+            voiceCallBroadcastReceiver = null;
+        }
 
     }
 
